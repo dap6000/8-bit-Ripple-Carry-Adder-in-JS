@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+
+  <head>
+    <title>Badd - Addition with binary</title>
+    <meta charset="utf-8">
+    <meta name="description" content="Convert 2 numbers to binary representation then use logic gates to add them.">
+    <meta name="author" content="Derek Pennycuff">
+    <style>
+      label, button {
+        display: block;
+        margin: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <label for="number1">Enter your 1st number: <input type="text" id="number1" name="number1" /></label>
+    <label for="number2">Enter your 2nd number: <input type="text" id="number2" name="number2" /></label>
+    <button id="add">Add</button>
+    <p>Enter numbers between 0 and 255. We will convert them to binary and add them using logic gates.</p>
+    <pre id="output"></pre>
+    <p><small>Inspired by <a href="https://www.youtube.com/watch?v=tpIctyqH29Q&list=PL8dPuuaLjXtNlUrzyH5r6jN9ulIgZBpdo">Crash Course: Computer Science</a> on YouTube. In particular <a href="https://www.youtube.com/watch?v=1I5ZMmrOfnA">Episode #5 How Computers Calculate</a>.</small></p>
+  </body>
+  <script>
+    // collect up our two inputs, our add button, and our output display as
+    // DOM elements
+    const num1 = document.querySelector('#number1');
+    const num2 = document.querySelector('#number2');
+    const add_btn = document.querySelector('#add');
+    const output = document.querySelector('#output');
+
+    /**
+     * Inputs give us strings, parse into base 10 ints and add like we normally
+     * would.
+     *
+     * @param String | Int a One of our input values
+     * @param String | Int b Our other input value
+     * @return Int The sum of the inputs
+     */
+    const traditional_add = function(a, b) {
+      return parseInt(a, 10) + parseInt(b, 10);
+    }
+
+    /**
+     * Convert inputs to binary representation then send them through a
+     * simulation of an 8 bit ripple carry adder returning the sum as a
+     * binary representation.
+     *
+     * @param String | int a One of our input values
+     * @param String | int b Our other input value
+     * @return Array[Bool] The sum of the inputs as an array of bools
+     */
+    const binary_add = function(a, b) {
+      return ripple_carry_adder(
+        int_to_bin(parseInt(a, 10)),
+        int_to_bin(parseInt(b, 10))
+      );
+    }
+
+    /**
+     * Event handler for our buton. Performs both a binary and traditional
+     * addition on our inputs and writes some output.
+     *
+     * @param Event evt Our click event, which we don't actually use
+     * @return void No return value, just DOM output
+     */
+    const handle_add = function(evt) {
+      try {
+        const bin_answer = binary_add(num1.value, num2.value);
+        const digit_answer = traditional_add(num1.value, num2.value);
+        output.innerHTML = `
+        Binary Answer:  ${bin_to_string(bin_answer)}
+        Digit Answer: ${digit_answer}
+        Binary Answer Converts To: ${bin_to_digit(bin_answer)}
+        `;
+      } catch (err) {
+        output.innerHTML = err.name + ': ' + err.message;
+      }
+
+    }
+
+    /**
+     * Treating our input bools as bit values, performs a bitwize XOR for the
+     * sum and a bitwize AND for the carry, simulates addition via logic gates.
+     *
+     * @param Bool a A single bit from one of our inputs
+     * @param Bool b A single bit from our other input
+     * @return Object Contains keys for sum and carry
+     */
+    const half_adder = function(a, b) {
+      return {
+        sum: (a ^ b),
+        carry: (a & b),
+      };
+    }
+
+    /**
+     * Wiring together 2 half_adder() calls to faciliate an opperation using
+     * any carry bits from previous bits / columns.
+     *
+     * @param Bool a A single bit from one of our inputs
+     * @param Bool b A single bit from our other input
+     * @param Bool c A single bit representing the carry from our last pass
+     * @return Object Contains keys for sum and carry
+     */
+    const full_adder = function(a, b, c) {
+      const half1 = half_adder(a, b);
+      const half2 = half_adder(half1.sum, c);
+      return {
+        sum: half2.sum,
+        carry: (half1.carry | half2.carry),
+      };
+    }
+
+    /**
+     * Wire together a half_adder and 7 full_adders into an 8-bit ripple carry
+     * adder to process our Array[Bool] representations for binary numbers.
+     *
+     * @param Array[Bool] a_bin Represents a binary number
+     * @param Array[Bool] b_bin Represents another binary number
+     @ @return Array[Bool] Represents our sum as a binary number
+     */
+    const ripple_carry_adder = function(a_bin, b_bin) {
+      const digit1 = half_adder(a_bin[7], b_bin[7]);
+      const digit2 = full_adder(a_bin[6], b_bin[6], digit1.carry);
+      const digit4 = full_adder(a_bin[5], b_bin[5], digit2.carry);
+      const digit8 = full_adder(a_bin[4], b_bin[4], digit4.carry);
+      const digit16 = full_adder(a_bin[3], b_bin[3], digit8.carry);
+      const digit32 = full_adder(a_bin[2], b_bin[2], digit16.carry);
+      const digit64 = full_adder(a_bin[1], b_bin[1], digit32.carry);
+      const digit128 = full_adder(a_bin[0], b_bin[0], digit64.carry);
+      if (digit128.carry) {
+        throw new RangeError('Oh no! Overflow!');
+      }
+      return [
+        digit128.sum,
+        digit64.sum,
+        digit32.sum,
+        digit16.sum,
+        digit8.sum,
+        digit4.sum,
+        digit2.sum,
+        digit1.sum,
+      ];
+    }
+
+    /**
+     * Convert our Array[Bool] representation for binary numbers back into
+     * base 10 Ints.
+     *
+     * @param Array[Bool] bin Representing an 8-bit binary number
+     * @return Int Our number represented by a standared Int value
+     */
+    const bin_to_digit = function(bin) {
+      for (i = 0, r = 0; i < 8; i++) {r += (bin[i]) ? Math.pow(2, (7 - i)) : 0;}
+
+      return r;
+    }
+
+    /**
+     * Convert an Integer value into an Array of Bools representing an 8-bit
+     * binary number.
+     *
+     * @param Int i The number to conver to binary
+     * @return Array[Bool] Binary representation of our number
+     */
+    const int_to_bin = function(i) {
+      if (! Number.isInteger(i)) {
+        throw new TypeError('Cannot convert a non-integer to binary!');
+      }
+      if (i < 0) {
+        throw new RangeError('Cannot convert a negative integer to binary!');
+      }
+      if (i > 255) {
+        throw new RangeError('Cannot convert integers larger than 255 to binary!');
+      }
+      const bin_array = [];
+      for (let col = 128; col >= 1; col = col / 2) {
+        if (i >= col) {
+          bin_array.push(true);
+          i = i - col;
+        } else {
+          bin_array.push(false);
+        }
+      }
+      return bin_array;
+    }
+
+    /**
+     * Convert our Array[Bool] representation of an 8-bit binary number into a
+     * string containing 8 1s / 0s.
+     *
+     * @param Array[Bool] Our binary represenation
+     * @return String 8 characters, each a 1 or a zero
+     */
+    const bin_to_string = function(bin) {
+      return bin.map(b => (b) ? '1' : '0').join('');
+    }
+
+    // Attach our event handler to our button
+    add_btn.addEventListener('click', handle_add);
+  </script>
+</html>
